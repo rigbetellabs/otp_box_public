@@ -417,7 +417,16 @@ A: Yes. Both control paths are independent and always active. The most recent OT
 
 **Q: What does "Domain ID" mean?**
 
-A: The ROS2 Domain ID is a network isolation setting used when the OTP Box is integrated with a ROS2 robot system. It allows multiple robot systems to operate on the same network without interfering with each other. This setting is typically configured by robot system administrators, not end users.
+A: The ROS2 Domain ID is a number (0–232) that determines which ROS2 communication network the OTP Box joins. Multiple robot systems on the same physical network can use different Domain IDs to operate independently without interfering with each other. This setting is typically configured by robot system administrators, not end users.
+
+---
+
+**Q: Where can I see the current ROS2 Domain ID?**
+
+A: In three places:
+- **On boot** — the LCD shows a full-screen splash `ROS Domain ID / ID: X` for 3 seconds every time the device powers on
+- **Keypad** — hold the `0` key for 3 seconds; the current ID appears on the bottom row of the display for 3 seconds
+- **Web portal** — the status card always shows a **ROS Domain ID** row with the current value
 
 ---
 
@@ -454,9 +463,39 @@ A: A human-readable string describing current state. Examples:
 
 ---
 
+**Q: What message type does `/otp_box/domain_id` use?**
+
+A: `std_msgs/UInt8` — a single unsigned byte. Valid range is `0` to `232` (the full ROS2 domain ID range). Values above `232` are silently ignored.
+
+---
+
 **Q: How do I change the ROS2 Domain ID?**
 
-A: Publish a `std_msgs/UInt8` message to `/otp_box/domain_id` with the desired ID (0–232). The device saves the new ID and restarts automatically. You can also view the current Domain ID by holding `0` on the keypad for 3 seconds.
+A: Publish a `std_msgs/UInt8` message to `/otp_box/domain_id` with the desired ID (0–232):
+
+```bash
+ros2 topic pub --once /otp_box/domain_id std_msgs/msg/UInt8 "data: 42"
+```
+
+The device will:
+1. Validate the value (IDs above 232 are silently ignored)
+2. Save the new ID to EEPROM immediately
+3. Display a confirmation splash on the LCD
+4. Restart automatically to reconnect on the new domain
+
+The Domain ID **cannot** be changed from the web portal or the keypad — only via the ROS2 topic.
+
+---
+
+**Q: Will the Domain ID be lost if the device restarts or loses power?**
+
+A: No. The Domain ID is saved to non-volatile EEPROM memory and is restored on every power-on. The device always displays the active Domain ID on the LCD for 3 seconds during startup so you can confirm the correct value.
+
+---
+
+**Q: The device restarted on its own. Did something go wrong?**
+
+A: Not necessarily. Publishing to the `/otp_box/domain_id` topic causes an intentional restart — this is required to reconnect the microROS agent on the new domain. The LCD will show the new Domain ID before restarting. If you did not publish to that topic, see the Troubleshooting section of the User Guide.
 
 ---
 
