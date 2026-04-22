@@ -18,8 +18,9 @@
 8. [Unlocking the Box (Recipients)](#8-unlocking-the-box-recipients)
 9. [Device States Explained](#9-device-states-explained)
 10. [Security Features](#10-security-features)
-11. [Troubleshooting](#11-troubleshooting)
-12. [Technical Specifications](#12-technical-specifications)
+11. [Managing the ROS2 Domain ID](#11-managing-the-ros2-domain-id)
+12. [Troubleshooting](#12-troubleshooting)
+13. [Technical Specifications](#13-technical-specifications)
 
 ---
 
@@ -103,7 +104,7 @@ The OTP Box broadcasts its own Wi-Fi network at all times. No internet connectio
 
 The web portal provides:
 
-- **Live status dashboard** — Current state, countdown timer, and progress bar
+- **Live status dashboard** — Current state, ROS2 Domain ID, countdown timer, and progress bar
 - **Set OTP form** — Configure OTP code, validity duration, and unlock duration
 - **Reset button** — Clear the current OTP and return to idle state
 - **Auto-refresh** — Status updates every 1.5 seconds automatically
@@ -180,6 +181,14 @@ To reset/clear the OTP: publish with `data[0] = 0`
 Monitor status on the `/otp_box/get_otp` topic (publishes at 1 Hz).
 
 > **Note:** If both the web portal and ROS2 system set an OTP, the most recent one takes effect.
+
+### ROS2 Topics Summary
+
+| Topic | Type | Direction | Purpose |
+|---|---|---|---|
+| `/otp_box/set_otp` | `std_msgs/Int32MultiArray` | Subscribe | Set OTP, validity, and unlock duration |
+| `/otp_box/get_otp` | `std_msgs/String` | Publish (1 Hz) | Human-readable status string |
+| `/otp_box/domain_id` | `std_msgs/UInt8` | Subscribe | Change and persist the ROS2 Domain ID |
 
 ---
 
@@ -263,7 +272,49 @@ The OTP Box Wi-Fi is a local-only access point. No internet connection is made a
 
 ---
 
-## 11. Troubleshooting
+## 11. Managing the ROS2 Domain ID
+
+The **ROS2 Domain ID** is a network isolation number (0–232) that determines which ROS2 network the OTP Box communicates on. The device stores this value in non-volatile memory (EEPROM) so it persists across power cycles and restarts.
+
+### Viewing the Current Domain ID
+
+There are two ways to check the active Domain ID without needing a robot system:
+
+| Method | How |
+|---|---|
+| **On boot** | The display shows a full-screen splash `ROS Domain ID / ID: X` for 3 seconds every time the device powers on |
+| **Keypad shortcut** | Hold the `0` key for 3 seconds — the current Domain ID appears on the bottom row of the display for 3 seconds |
+| **Web portal** | The status dashboard always shows the current Domain ID in the **ROS Domain ID** row |
+
+### Changing the Domain ID
+
+Domain ID can only be changed via the **ROS2 topic** — it cannot be set from the web portal or keypad.
+
+1. Publish a `std_msgs/UInt8` message to `/otp_box/domain_id` with the new ID value (0–232)
+2. The device displays the new Domain ID on screen for 3 seconds as confirmation
+3. The new ID is saved to EEPROM immediately
+4. The device **restarts automatically** to reconnect the microROS agent on the new domain
+
+**Example (ROS2 CLI):**
+```bash
+ros2 topic pub --once /otp_box/domain_id std_msgs/msg/UInt8 "data: 42"
+```
+
+> **Note:** Values above 232 are ignored — the valid ROS2 domain ID range is 0–232.
+
+> **Note:** After the device restarts, your robot system must also be running the microROS agent on the same Domain ID for communication to resume.
+
+### Domain ID and the Web Portal
+
+Changing the Domain ID only affects the ROS2 connection. The **Wi-Fi web portal operates independently** of the ROS2 Domain ID and remains accessible at `http://192.168.4.1` regardless of the current domain setting.
+
+---
+
+## 12. Troubleshooting
+
+### The device restarted unexpectedly
+
+If you recently published to `/otp_box/domain_id`, the restart is intentional — the device reboots to apply the new ROS2 Domain ID. It will display the new ID on the LCD before and after restarting.
 
 ### The box display shows "Connecting ROS2 / Please wait..."
 
@@ -307,7 +358,7 @@ Hold the `0` key for 6 seconds to restart the device. The display will show `Res
 
 ---
 
-## 12. Technical Specifications
+## 13. Technical Specifications
 
 | Parameter | Value |
 |---|---|
@@ -325,6 +376,9 @@ Hold the `0` key for 6 seconds to restart the device. The display will show `Res
 | **Status Refresh Rate** | Every 1.5 seconds (web) / Every 1 second (display) |
 | **ROS2 Status Topic** | `/otp_box/get_otp` (1 Hz) |
 | **ROS2 Control Topic** | `/otp_box/set_otp` |
+| **ROS2 Domain ID Topic** | `/otp_box/domain_id` (`std_msgs/UInt8`, range 0–232) |
+| **Domain ID Storage** | EEPROM (persists across restarts) |
+| **Domain ID Default** | `0` |
 
 ---
 
